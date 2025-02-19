@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,24 +10,29 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { Tables } from "@/types/supabase";
 
-interface AddServerDialogProps {
-  onServerAdded?: () => void;
+type Server = Tables<"servers"> & { server_tags: Tables<"server_tags">[] };
+
+interface EditServerDialogProps {
+  server: Server;
+  onServerUpdated?: () => void;
 }
 
-export default function AddServerDialog({
-  onServerAdded,
-}: AddServerDialogProps) {
+export default function EditServerDialog({
+  server,
+  onServerUpdated,
+}: EditServerDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    inviteUrl: "",
-    bannerUrl: "",
-    tags: [],
+    name: server.name,
+    description: server.description,
+    inviteUrl: server.invite_url,
+    bannerUrl: server.banner_url,
+    tags: server.server_tags.map((tag) => tag.tag),
   });
 
   const availableTags = [
@@ -46,33 +51,26 @@ export default function AddServerDialog({
     setLoading(true);
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      const { data: server, error: serverError } = await supabase
+      // Update server details
+      const { error: serverError } = await supabase
         .from("servers")
-        .insert({
+        .update({
           name: formData.name,
           description: formData.description,
           invite_url: formData.inviteUrl,
-          banner_url:
-            formData.bannerUrl ||
-            "https://images.unsplash.com/photo-1614422982208-51274e106c1e",
-          owner_id: user.id,
-          member_count: 0,
+          banner_url: formData.bannerUrl,
         })
-        .select()
-        .single();
+        .eq("id", server.id);
 
       if (serverError) throw serverError;
 
-      const tags = formData.tags;
+      // Delete existing tags
+      await supabase.from("server_tags").delete().eq("server_id", server.id);
 
-      if (tags.length > 0) {
+      // Add new tags
+      if (formData.tags.length > 0) {
         const { error: tagsError } = await supabase.from("server_tags").insert(
-          tags.map((tag) => ({
+          formData.tags.map((tag) => ({
             server_id: server.id,
             tag,
           })),
@@ -82,9 +80,9 @@ export default function AddServerDialog({
       }
 
       setOpen(false);
-      onServerAdded?.();
+      onServerUpdated?.();
     } catch (error) {
-      console.error("Error adding server:", error);
+      console.error("Error updating server:", error);
     } finally {
       setLoading(false);
     }
@@ -93,14 +91,17 @@ export default function AddServerDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2">
-          <PlusCircle className="h-5 w-5" />
-          Add Server
+        <Button
+          variant="secondary"
+          size="icon"
+          className="h-8 w-8 bg-zinc-800 hover:bg-zinc-700"
+        >
+          <Pencil className="h-4 w-4" />
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Add Discord Server</DialogTitle>
+          <DialogTitle>Edit Server</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           <div className="space-y-2">
@@ -146,6 +147,7 @@ export default function AddServerDialog({
             <Input
               id="bannerUrl"
               type="url"
+              required
               placeholder="https://..."
               value={formData.bannerUrl}
               onChange={(e) =>
@@ -186,7 +188,7 @@ export default function AddServerDialog({
               loading || !formData.bannerUrl || formData.tags.length === 0
             }
           >
-            {loading ? "Adding Server..." : "Add Server"}
+            {loading ? "Updating Server..." : "Update Server"}
           </Button>
         </form>
       </DialogContent>

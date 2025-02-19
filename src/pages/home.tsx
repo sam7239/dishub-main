@@ -31,10 +31,15 @@ export default function HomePage() {
   useEffect(() => {
     const fetchServers = async () => {
       try {
-        const { data, error } = await supabase.from("servers").select(`
+        const { data, error } = await supabase
+          .from("servers")
+          .select(
+            `
             *,
             server_tags (*)
-          `);
+          `,
+          )
+          .order("last_bumped", { ascending: false });
 
         if (error) throw error;
         setServers(data as Server[]);
@@ -67,22 +72,20 @@ export default function HomePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background p-8">
+      <div className="min-h-screen bg-zinc-950 p-8">
         <div className="max-w-7xl mx-auto">
-          <p className="text-foreground">Loading servers...</p>
+          <p className="text-white">Loading servers...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-zinc-950">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col items-center space-y-8">
           <div className="w-full flex justify-between items-center">
-            <h1 className="text-4xl font-bold text-foreground">
-              Discord Servers
-            </h1>
+            <h1 className="text-4xl font-bold text-white">Discord Servers</h1>
             {isAuthenticated ? (
               <Button
                 onClick={() => navigate("/dashboard")}
@@ -100,15 +103,41 @@ export default function HomePage() {
             )}
           </div>
 
-          <div className="w-full max-w-2xl relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-            <Input
-              type="text"
-              placeholder="Search servers by name, description, or tags..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 w-full"
-            />
+          <div className="w-full space-y-4">
+            <div className="w-full max-w-2xl relative mx-auto">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 h-5 w-5" />
+              <Input
+                type="text"
+                placeholder="Search servers by name, description, or tags..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 w-full bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-400 h-12 text-lg"
+              />
+            </div>
+            <div className="flex flex-wrap justify-center gap-2">
+              {[
+                "Chill",
+                "Fun",
+                "Gaming",
+                "NSFW",
+                "18+",
+                "Community",
+                "Entertainment",
+                "Social",
+              ].map((tag) => (
+                <Button
+                  key={tag}
+                  variant="outline"
+                  className={`
+                    border-zinc-700 hover:bg-zinc-800 transition-all
+                    ${searchQuery.toLowerCase() === tag.toLowerCase() ? "bg-[#5865F2] border-[#5865F2] text-white" : "text-zinc-400"}
+                  `}
+                  onClick={() => setSearchQuery(tag)}
+                >
+                  {tag}
+                </Button>
+              ))}
+            </div>
           </div>
 
           <TooltipProvider>
@@ -125,7 +154,7 @@ export default function HomePage() {
 
           {filteredServers.length === 0 && (
             <div className="text-center py-12">
-              <p className="text-muted-foreground">
+              <p className="text-zinc-400">
                 No servers found matching your search.
               </p>
             </div>

@@ -59,29 +59,31 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background p-8">
+      <div className="min-h-screen bg-zinc-950 p-8">
         <div className="max-w-7xl mx-auto">
-          <p className="text-foreground">Loading servers...</p>
+          <p className="text-white">Loading servers...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background p-8">
+    <div className="min-h-screen bg-zinc-950 p-8">
       <div className="max-w-7xl mx-auto space-y-8">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">
+            <h1 className="text-3xl font-bold text-white">
               My Discord Servers
             </h1>
-            <p className="text-muted-foreground mt-1">
-              Manage your published servers
-            </p>
+            <p className="text-zinc-400 mt-1">Manage your published servers</p>
           </div>
           <div className="flex gap-4">
             <AddServerDialog onServerAdded={fetchServers} />
-            <Button variant="outline" onClick={handleLogout} className="gap-2">
+            <Button
+              variant="outline"
+              onClick={handleLogout}
+              className="gap-2 bg-zinc-900 text-white border-zinc-800 hover:bg-zinc-800"
+            >
               <LogOut className="h-4 w-4" />
               Logout
             </Button>
@@ -95,6 +97,8 @@ export default function Dashboard() {
                 key={server.id}
                 server={server}
                 onJoin={handleJoinServer}
+                onDelete={fetchServers}
+                showDeleteButton
               />
             ))}
           </div>
@@ -102,7 +106,7 @@ export default function Dashboard() {
 
         {servers.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-muted-foreground">
+            <p className="text-zinc-400">
               You haven't published any servers yet. Add your first server!
             </p>
           </div>
