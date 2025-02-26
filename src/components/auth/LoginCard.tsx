@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   Card,
   CardContent,
@@ -23,7 +23,7 @@ const LoginCard = ({
   error = "",
 }: LoginCardProps) => {
   return (
-    <Card className="w-[400px] bg-white">
+    <Card className="w-[400px] bg-white flex flex-col flex-nowrap items-center justify-start">
       <CardHeader>
         <CardTitle>Welcome Back</CardTitle>
         <CardDescription>Sign in to your account using Discord</CardDescription>
@@ -53,7 +53,6 @@ const LoginCard = ({
           </Alert>
         )}
       </CardContent>
-
       <LoadingOverlay isLoading={isLoading} />
     </Card>
   );

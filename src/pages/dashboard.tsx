@@ -16,6 +16,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   const fetchServers = async () => {
+    setLoading(true);
     try {
       const {
         data: { session },
@@ -68,7 +69,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 p-8">
+    <div className="min-h-screen p-8 bg-[#1b1e23]">
       <div className="max-w-7xl mx-auto space-y-8">
         <div className="flex justify-between items-center">
           <div>

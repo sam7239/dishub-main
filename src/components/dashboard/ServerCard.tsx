@@ -7,7 +7,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tables } from "@/types/supabase";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Tooltip,
   TooltipContent,
@@ -27,7 +26,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowUp, Trash2 } from "lucide-react";
+import { ArrowUp, Clock, Trash2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import EditServerDialog from "./EditServerDialog";
 
 type Server = Tables<"servers"> & { server_tags: Tables<"server_tags">[] };
@@ -36,8 +42,8 @@ interface ServerCardProps {
   server: Server;
   onJoin?: (inviteUrl: string) => void;
   onDelete?: () => void;
-  activeMembers?: number;
   showDeleteButton?: boolean;
+  className?: string;
 }
 
 export default function ServerCard({
@@ -45,6 +51,7 @@ export default function ServerCard({
   onJoin,
   onDelete,
   showDeleteButton = false,
+  className = "",
 }: ServerCardProps) {
   const [activeMembers, setActiveMembers] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -52,58 +59,61 @@ export default function ServerCard({
   const [lastBumped, setLastBumped] = useState<Date | null>(
     server.last_bumped ? new Date(server.last_bumped) : null,
   );
+  const [canBump, setCanBump] = useState(true);
+  const [showBumpSuccess, setShowBumpSuccess] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
 
-  // Fetch and subscribe to active members
   useEffect(() => {
-    // Fetch initial active members
-    const fetchActiveMembers = async () => {
-      const { count } = await supabase
-        .from("presence")
-        .select("*", { count: "exact", head: true })
-        .eq("server_id", server.id)
-        .eq("online", true); // Assuming presence table has an 'online' boolean column
+    // Calculate active members based on total members (10%)
+    const calculatedActive = Math.floor(server.member_count * 0.1);
+    setActiveMembers(Math.min(calculatedActive, 1000)); // Cap at 1000 active members
+  }, [server.member_count]);
 
-      setActiveMembers(count || 0);
+  useEffect(() => {
+    // Check if current user is the owner
+    const checkOwnership = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setIsOwner(user?.id === server.owner_id);
     };
+    checkOwnership();
+  }, [server.owner_id]);
 
-    fetchActiveMembers();
-
-    // Subscribe to real-time presence changes
-    const presenceSubscription = supabase
-      .channel(`server_${server.id}_presence`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "presence",
-          filter: `server_id=eq.${server.id}`,
-        },
-        async () => {
-          const { count } = await supabase
-            .from("presence")
-            .select("*", { count: "exact", head: true })
-            .eq("server_id", server.id)
-            .eq("online", true); // Again, using 'online' column
-
-          setActiveMembers(count || 0);
-        },
-      )
-      .subscribe();
-
-    return () => {
-      presenceSubscription.unsubscribe();
-    };
-  }, [server.id]);
+  useEffect(() => {
+    if (!lastBumped) return;
+    const timeSinceLastBump = Date.now() - lastBumped.getTime();
+    const hoursLeft = 2 - timeSinceLastBump / (1000 * 60 * 60);
+    setCanBump(hoursLeft <= 0);
+  }, [lastBumped]);
 
   const handleDelete = async () => {
+    if (!isOwner) return;
     setIsDeleting(true);
     try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || user.id !== server.owner_id) {
+        throw new Error("Unauthorized");
+      }
+
       // Delete server tags first
-      await supabase.from("server_tags").delete().eq("server_id", server.id);
+      const { error: tagsError } = await supabase
+        .from("server_tags")
+        .delete()
+        .eq("server_id", server.id);
+
+      if (tagsError) throw tagsError;
 
       // Then delete the server
-      await supabase.from("servers").delete().eq("id", server.id);
+      const { error: serverError } = await supabase
+        .from("servers")
+        .delete()
+        .eq("id", server.id)
+        .eq("owner_id", user.id); // Extra security check
+
+      if (serverError) throw serverError;
 
       onDelete?.();
     } catch (error) {
@@ -114,15 +124,28 @@ export default function ServerCard({
   };
 
   const handleBump = async () => {
+    if (!canBump || !isOwner) return;
     setIsBumping(true);
     try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || user.id !== server.owner_id) {
+        throw new Error("Unauthorized");
+      }
+
       const { error } = await supabase
         .from("servers")
         .update({ last_bumped: new Date().toISOString() })
-        .eq("id", server.id);
+        .eq("id", server.id)
+        .eq("owner_id", user.id); // Extra security check
 
       if (error) throw error;
-      setLastBumped(new Date());
+
+      const now = new Date();
+      setLastBumped(now);
+      setShowBumpSuccess(true);
+      setTimeout(() => setShowBumpSuccess(false), 3000);
     } catch (error) {
       console.error("Error bumping server:", error);
     } finally {
@@ -130,29 +153,24 @@ export default function ServerCard({
     }
   };
 
-  const canBump =
-    !lastBumped || Date.now() - lastBumped.getTime() > 2 * 60 * 60 * 1000;
+  const handleJoin = (inviteUrl: string) => {
+    // Validate Discord invite URL
+    if (!inviteUrl.match(/^https:\/\/discord\.gg\/[a-zA-Z0-9]+$/)) {
+      console.error("Invalid Discord invite URL");
+      return;
+    }
+    onJoin?.(inviteUrl);
+  };
 
   return (
-    <Card className="w-full max-w-sm bg-zinc-900 overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 border-zinc-800">
+    <Card
+      className={`w-full max-w-sm bg-zinc-900 overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 border-zinc-800 h-[500px] flex flex-col ${className}`}
+    >
       <div
         className="h-40 w-full bg-cover bg-center relative"
         style={{ backgroundImage: `url(${server.banner_url})` }}
       >
-        <div className="absolute bottom-2 left-2">
-          <Tooltip>
-            <TooltipTrigger>
-              <Avatar className="h-12 w-12 border-2 border-zinc-800">
-                <AvatarImage src={server.profile_url} alt={server.name} />
-                <AvatarFallback>{server.name.charAt(0)}</AvatarFallback>
-              </Avatar>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Server Profile</p>
-            </TooltipContent>
-          </Tooltip>
-        </div>
-        {showDeleteButton && (
+        {showDeleteButton && isOwner && (
           <div className="absolute top-2 right-2 flex gap-2">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -170,13 +188,11 @@ export default function ServerCard({
                 <p>
                   {canBump
                     ? "Bump Server"
-                    : "Can bump again in " +
-                      Math.ceil(
+                    : `Can bump again in ${Math.ceil(
                         2 -
                           (Date.now() - (lastBumped?.getTime() || 0)) /
                             (60 * 60 * 1000),
-                      ) +
-                      " hours"}
+                      )} hours`}
                 </p>
               </TooltipContent>
             </Tooltip>
@@ -234,7 +250,7 @@ export default function ServerCard({
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-grow">
         <p className="text-sm text-zinc-300 line-clamp-3 mb-4">
           {server.description}
         </p>
@@ -253,11 +269,31 @@ export default function ServerCard({
       <CardFooter>
         <Button
           className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white font-semibold py-2 rounded-lg transition-colors duration-300"
-          onClick={() => onJoin?.(server.invite_url)}
+          onClick={() => handleJoin(server.invite_url)}
         >
           Join Server
         </Button>
       </CardFooter>
+      {lastBumped && (
+        <div className="flex items-center justify-center gap-1 text-xs text-zinc-400 pb-4">
+          <Clock className="h-3 w-3" />
+          <span>
+            Bumped {Math.floor((Date.now() - lastBumped.getTime()) / 60000)}{" "}
+            minutes ago
+          </span>
+        </div>
+      )}
+      <Dialog open={showBumpSuccess} onOpenChange={setShowBumpSuccess}>
+        <DialogContent className="sm:max-w-[425px] bg-zinc-900 border-zinc-800">
+          <DialogHeader>
+            <DialogTitle className="text-white">Server Bumped!</DialogTitle>
+            <DialogDescription className="text-zinc-400">
+              Your server has been bumped to the top of the list. You can bump
+              again in 2 hours.
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

@@ -43,10 +43,11 @@ function App() {
     <Layout isAuthenticated={isAuthenticated}>
       <Suspense
         fallback={
-          <div className="h-screen w-full flex items-center justify-center">
+          <div className="h-screen w-full flex items-center justify-center bg-[#310f3e] from-[#330909]">
             Loading...
           </div>
         }
+        className="bg-[#9e1a1a]"
       >
         {/* Tempo routes */}
         {import.meta.env.VITE_TEMPO === "true" && useRoutes(routes)}

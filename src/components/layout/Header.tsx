@@ -24,31 +24,23 @@ export default function Header({
   const navigate = useNavigate();
 
   return (
-    <header className="border-b bg-white">
+    <header className="border-b bg-[#NaNNaNNaN] from-[#c72a2a] bg-[#5a67fc]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
             <a href="/" className="flex items-center space-x-2">
               <MessageCircle className="h-8 w-8 text-[#5865F2]" />
-              <span className="text-xl font-bold">Dishub</span>
+              <span className="text-xl font-bold bg-inherit text-[#ffffff]">
+                Dishub
+              </span>
             </a>
           </div>
 
-          <nav className="flex items-center space-x-4">
-            <a href="/" className="text-sm font-medium hover:text-[#5865F2]">
-              Home
-            </a>
+          <nav className="flex items-center space-x-4 text-[#feffff]">
             {isAuthenticated ? (
               <div className="flex items-center gap-4">
-                <Button
-                  onClick={() => navigate("/dashboard")}
-                  variant="ghost"
-                  className="text-sm font-medium hover:text-[#5865F2]"
-                >
-                  Dashboard
-                </Button>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-zinc-400">
+                  <span className="text-sm text-[#fffefe]">
                     {user?.user_metadata?.full_name ||
                       user?.user_metadata?.name ||
                       "User"}
@@ -66,12 +58,7 @@ export default function Header({
                 </div>
               </div>
             ) : (
-              <Button
-                onClick={() => navigate("/login")}
-                className="bg-[#5865F2] hover:bg-[#4752C4] text-white flex-row"
-              >
-                Login
-              </Button>
+              <></>
             )}
           </nav>
         </div>

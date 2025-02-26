@@ -1,6 +1,8 @@
 import { supabase } from "./supabase";
 
 export const signInWithDiscord = async () => {
+  // Clear any existing session first
+  await supabase.auth.signOut();
   try {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "discord",
