@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import DiscordLoginCard from "@/components/auth/DiscordLoginCard";
-import { signInWithDiscord } from "@/lib/firebase";
+import { loginWithDiscordDirect } from "@/lib/discordDirectAuth";
 
 const LoginPage = () => {
+  const navigate = useNavigate();
   const [authState, setAuthState] = useState<
     "idle" | "loading" | "success" | "error"
   >("idle");
@@ -17,14 +18,17 @@ const LoginPage = () => {
     }
   }, [searchParams]);
 
-  const handleLogin = async () => {
+  const handleLogin = () => {
     setAuthState("loading");
     setErrorMessage("");
 
-    const { error: authError } = await signInWithDiscord();
-    if (authError) {
+    try {
+      // Direct Discord OAuth flow - redirects to Discord
+      loginWithDiscordDirect();
+      // No need to set success state as we're redirecting away
+    } catch (error) {
       setAuthState("error");
-      setErrorMessage(authError.message || "Failed to connect to Discord");
+      setErrorMessage("Failed to connect to Discord");
     }
   };
 

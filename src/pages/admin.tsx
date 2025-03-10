@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { seedServers } from "@/scripts/seedServers";
 import { seedMoreServers } from "@/scripts/seedMoreServers";
+import { seed50Servers } from "@/scripts/seed50Servers";
 import { useNavigate } from "react-router-dom";
 import { signOutUser } from "@/lib/firebase";
 
@@ -44,6 +45,23 @@ export default function AdminPage() {
     }
   };
 
+  const handleSeed50Servers = async () => {
+    setLoading(true);
+    setMessage("Seeding 50 diverse servers...");
+    try {
+      const result = await seed50Servers();
+      if (result.success) {
+        setMessage(result.message || "Successfully seeded 50 servers!");
+      } else {
+        setMessage(`Error: ${result.error}`);
+      }
+    } catch (error) {
+      setMessage(`Error: ${error}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLogout = async () => {
     await signOutUser();
     navigate("/login");
@@ -66,9 +84,16 @@ export default function AdminPage() {
             <Button
               onClick={handleSeedMoreServers}
               disabled={loading}
-              className="w-full bg-[#5865F2] hover:bg-[#4752C4]"
+              className="w-full bg-[#5865F2] hover:bg-[#4752C4] mb-2"
             >
               {loading ? "Processing..." : "Seed 10 More Servers"}
+            </Button>
+            <Button
+              onClick={handleSeed50Servers}
+              disabled={loading}
+              className="w-full bg-[#5865F2] hover:bg-[#4752C4]"
+            >
+              {loading ? "Processing..." : "Seed 50 Diverse Servers"}
             </Button>
           </div>
 

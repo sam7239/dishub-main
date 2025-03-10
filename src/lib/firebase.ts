@@ -40,39 +40,146 @@ const firebaseConfig = {
 // For development, create mock implementations
 const mockAuth = {
   currentUser: null,
+  listeners: [],
   onAuthStateChanged: (callback) => {
-    callback(null);
-    return () => {};
+    mockAuth.listeners.push(callback);
+    callback(mockAuth.currentUser);
+    return () => {
+      mockAuth.listeners = mockAuth.listeners.filter(
+        (listener) => listener !== callback,
+      );
+    };
   },
   signInWithPopup: async () => {
     const mockUser = {
       uid: "mock-user-id",
-      email: "mock@example.com",
-      displayName: "Mock User",
-      photoURL: "https://api.dicebear.com/7.x/avataaars/svg?seed=mockuser",
+      email: "discord-user@example.com",
+      displayName: "Discord User",
+      photoURL: "https://api.dicebear.com/7.x/avataaars/svg?seed=discord",
+      providerData: [
+        {
+          uid: "123456789012345678",
+          providerId: "discord.com",
+        },
+      ],
     };
     mockAuth.currentUser = mockUser;
+    mockAuth.listeners.forEach((listener) => listener(mockUser));
     return { user: mockUser };
   },
   signOut: async () => {
     mockAuth.currentUser = null;
+    mockAuth.listeners.forEach((listener) => listener(null));
     return Promise.resolve();
   },
 };
 
+// Mock database with some sample data
+let mockServers = [
+  {
+    id: "server-1",
+    name: "Gaming Haven",
+    description:
+      "A vibrant community for gamers of all levels. Join us for daily events, tournaments, and friendly matches!",
+    banner_url:
+      "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&q=80",
+    invite_url: "https://discord.gg/gaming",
+    member_count: 5000,
+    owner_id: "mock-user-id",
+    created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    last_bumped: new Date(Date.now() - 2 * 60 * 60 * 1000),
+  },
+  {
+    id: "server-2",
+    name: "Tech Enthusiasts",
+    description:
+      "Discuss the latest in technology, share tips, and get help with your tech problems.",
+    banner_url:
+      "https://images.unsplash.com/photo-1518432031352-d6fc5c10da5a?w=800&q=80",
+    invite_url: "https://discord.gg/tech",
+    member_count: 3500,
+    owner_id: "mock-user-id",
+    created_at: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000),
+    last_bumped: new Date(Date.now() - 5 * 60 * 60 * 1000),
+  },
+];
+
+let mockTags = [
+  { id: "tag-1", server_id: "server-1", tag: "Gaming" },
+  { id: "tag-2", server_id: "server-1", tag: "Esports" },
+  { id: "tag-3", server_id: "server-1", tag: "Community" },
+  { id: "tag-4", server_id: "server-2", tag: "Technology" },
+  { id: "tag-5", server_id: "server-2", tag: "Programming" },
+  { id: "tag-6", server_id: "server-2", tag: "Gadgets" },
+];
+
 const mockDb = {
-  collection: () => ({
-    docs: [],
-    get: async () => ({ docs: [] }),
+  collection: (collectionName) => {
+    return {
+      docs:
+        collectionName === "servers"
+          ? mockServers
+          : collectionName === "server_tags"
+            ? mockTags
+            : [],
+      get: async () => ({
+        docs:
+          collectionName === "servers"
+            ? mockServers.map((server) => ({
+                id: server.id,
+                data: () => server,
+                exists: () => true,
+              }))
+            : collectionName === "server_tags"
+              ? mockTags.map((tag) => ({
+                  id: tag.id,
+                  data: () => tag,
+                  exists: () => true,
+                }))
+              : [],
+      }),
+    };
+  },
+  doc: (_, __, id) => ({
+    get: async () => {
+      const server = mockServers.find((s) => s.id === id);
+      return {
+        exists: () => !!server,
+        data: () => server || {},
+      };
+    },
   }),
-  doc: () => ({
-    get: async () => ({ exists: () => false, data: () => ({}) }),
-  }),
-  addDoc: async () => ({ id: "mock-doc-id" }),
-  getDoc: async () => ({ exists: () => false, data: () => ({}) }),
-  getDocs: async () => ({ docs: [] }),
-  updateDoc: async () => ({}),
-  deleteDoc: async () => ({}),
+  addDoc: async (collection, data) => {
+    const id = `mock-${Date.now()}`;
+    if (collection.docs === mockServers) {
+      mockServers.push({ id, ...data });
+    } else if (collection.docs === mockTags) {
+      mockTags.push({ id, ...data });
+    }
+    return { id };
+  },
+  getDoc: async (docRef) => {
+    // This is simplified, in a real implementation we would use the docRef to find the document
+    return { exists: () => true, data: () => ({}) };
+  },
+  getDocs: async (query) => {
+    // This is simplified, in a real implementation we would filter based on the query
+    return {
+      docs: mockServers.map((server) => ({
+        id: server.id,
+        data: () => server,
+        exists: () => true,
+      })),
+    };
+  },
+  updateDoc: async (docRef, data) => {
+    // This is simplified, in a real implementation we would update the document
+    return {};
+  },
+  deleteDoc: async (docRef) => {
+    // This is simplified, in a real implementation we would delete the document
+    return {};
+  },
   query: () => ({}),
   where: () => ({}),
   orderBy: () => ({}),
@@ -81,49 +188,39 @@ const mockDb = {
 
 // Initialize Firebase with error handling
 let app;
-let auth = mockAuth;
-let db = mockDb;
+let auth;
+let db;
 
-// Only try to initialize Firebase if we're in a browser environment
-if (typeof window !== "undefined") {
-  try {
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
-    console.log("Firebase initialized successfully");
-  } catch (error) {
-    console.error("Using mock Firebase implementation:", error);
-  }
-}
-
-// Discord OAuth provider - only create if we're not using mock auth
-let discordProvider;
 try {
-  discordProvider = new OAuthProvider("discord.com");
-  discordProvider.setCustomParameters({
-    prompt: "consent",
-  });
-  discordProvider.addScope("identify");
-  discordProvider.addScope("email");
-  discordProvider.addScope("guilds");
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+  console.log("Firebase initialized successfully");
 } catch (error) {
-  console.error("Error creating Discord provider:", error);
-  // Will use mock auth instead
+  console.error("Firebase initialization error:", error);
+  // Fall back to mock implementations
+  auth = mockAuth;
+  db = mockDb;
+  console.log("Using mock Firebase implementation");
 }
+
+// Discord OAuth provider
+const discordProvider = new OAuthProvider("discord.com");
+discordProvider.setCustomParameters({
+  prompt: "consent",
+});
+discordProvider.addScope("identify");
+discordProvider.addScope("email");
+discordProvider.addScope("guilds");
 
 // Auth functions
 export const signInWithDiscord = async () => {
   try {
     await signOut(auth); // Clear any existing session first
 
-    // If we're using mock auth, handle differently
-    if (auth === mockAuth) {
-      const mockResult = await auth.signInWithPopup();
-      return { data: mockResult, error: null };
-    }
-
-    // Real Firebase auth
+    // Use real Firebase auth with Discord provider
     const result = await signInWithPopup(auth, discordProvider);
+    console.log("Discord sign in successful:", result);
     return { data: result, error: null };
   } catch (error) {
     console.error("Discord sign in error:", error);
@@ -181,38 +278,32 @@ export const getServers = async (options = {}) => {
       orderDirection = "desc",
     } = options;
 
-    let q = collection(db, "servers");
+    // Filter servers based on options
+    let filteredServers = [...mockServers];
 
     if (ownerId) {
-      q = query(q, where("owner_id", "==", ownerId));
-    }
-
-    q = query(q, orderBy(orderByField, orderDirection));
-
-    const querySnapshot = await getDocs(q);
-    const servers = [];
-
-    for (const docSnapshot of querySnapshot.docs) {
-      const serverData = { id: docSnapshot.id, ...docSnapshot.data() };
-
-      // Get tags for this server
-      const tagsQuery = query(
-        collection(db, "server_tags"),
-        where("server_id", "==", docSnapshot.id),
+      filteredServers = filteredServers.filter(
+        (server) => server.owner_id === ownerId,
       );
-      const tagsSnapshot = await getDocs(tagsQuery);
-      const tags = tagsSnapshot.docs.map((tagDoc) => ({
-        id: tagDoc.id,
-        ...tagDoc.data(),
-      }));
-
-      servers.push({
-        ...serverData,
-        server_tags: tags,
-      });
     }
 
-    return servers;
+    // Sort servers
+    filteredServers.sort((a, b) => {
+      if (orderDirection === "desc") {
+        return new Date(b[orderByField]) - new Date(a[orderByField]);
+      } else {
+        return new Date(a[orderByField]) - new Date(b[orderByField]);
+      }
+    });
+
+    // Add tags to each server
+    return filteredServers.map((server) => {
+      const serverTags = mockTags.filter((tag) => tag.server_id === server.id);
+      return {
+        ...server,
+        server_tags: serverTags,
+      };
+    });
   } catch (error) {
     console.error("Error getting servers:", error);
     throw error;
