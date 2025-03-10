@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import DiscordLoginCard from "@/components/auth/DiscordLoginCard";
-import { signInWithDiscord } from "@/lib/auth";
+import { signInWithDiscord } from "@/lib/firebase";
 
 const LoginPage = () => {
   const [authState, setAuthState] = useState<

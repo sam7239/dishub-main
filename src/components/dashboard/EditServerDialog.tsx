@@ -11,10 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Pencil } from "lucide-react";
-import { supabase } from "@/lib/supabase";
-import { Tables } from "@/types/supabase";
+import { updateServer } from "@/lib/firebase";
+import { Server, ServerTag } from "@/types/firebase";
 
-type Server = Tables<"servers"> & { server_tags: Tables<"server_tags">[] };
+// Server type is imported from @/types/firebase
 
 interface EditServerDialogProps {
   server: Server;
@@ -51,33 +51,13 @@ export default function EditServerDialog({
     setLoading(true);
 
     try {
-      // Update server details
-      const { error: serverError } = await supabase
-        .from("servers")
-        .update({
-          name: formData.name,
-          description: formData.description,
-          invite_url: formData.inviteUrl,
-          banner_url: formData.bannerUrl,
-        })
-        .eq("id", server.id);
-
-      if (serverError) throw serverError;
-
-      // Delete existing tags
-      await supabase.from("server_tags").delete().eq("server_id", server.id);
-
-      // Add new tags
-      if (formData.tags.length > 0) {
-        const { error: tagsError } = await supabase.from("server_tags").insert(
-          formData.tags.map((tag) => ({
-            server_id: server.id,
-            tag,
-          })),
-        );
-
-        if (tagsError) throw tagsError;
-      }
+      await updateServer(server.id, {
+        name: formData.name,
+        description: formData.description,
+        invite_url: formData.inviteUrl,
+        banner_url: formData.bannerUrl,
+        tags: formData.tags,
+      });
 
       setOpen(false);
       onServerUpdated?.();

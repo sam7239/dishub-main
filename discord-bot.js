@@ -1,5 +1,14 @@
 const { Client, GatewayIntentBits } = require("discord.js");
-const { createClient } = require("@supabase/supabase-js");
+const { initializeApp } = require("firebase/app");
+const {
+  getFirestore,
+  collection,
+  query,
+  where,
+  getDocs,
+  updateDoc,
+  doc,
+} = require("firebase/firestore");
 
 // Initialize Discord client
 const client = new Client({
@@ -10,11 +19,18 @@ const client = new Client({
   ],
 });
 
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY,
-);
+// Initialize Firebase
+const firebaseConfig = {
+  apiKey: process.env.FIREBASE_API_KEY,
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.FIREBASE_APP_ID,
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
 client.once("ready", () => {
   console.log("Bot is ready!");
@@ -28,11 +44,17 @@ client.on("messageCreate", async (message) => {
     }
     try {
       // Find the server in our database
-      const { data: server, error } = await supabase
-        .from("servers")
-        .select("*, server_tags(*)")
-        .eq("discord_id", message.guild.id)
-        .single();
+      const serversRef = collection(db, "servers");
+      const q = query(serversRef, where("discord_id", "==", message.guild.id));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        message.reply("This server is not registered on Dishub!");
+        return;
+      }
+
+      const serverDoc = querySnapshot.docs[0];
+      const server = { id: serverDoc.id, ...serverDoc.data() };
 
       // Rate limit check
       const rateLimit = await checkRateLimit(message.author.id);
@@ -41,14 +63,9 @@ client.on("messageCreate", async (message) => {
         return;
       }
 
-      if (error || !server) {
-        message.reply("This server is not registered on Dishub!");
-        return;
-      }
-
       // Check if enough time has passed since last bump (2 hours)
       const lastBumped = server.last_bumped
-        ? new Date(server.last_bumped)
+        ? new Date(server.last_bumped.toDate())
         : null;
       const now = new Date();
       const hoursSinceLastBump = lastBumped
@@ -62,12 +79,8 @@ client.on("messageCreate", async (message) => {
       }
 
       // Update the last_bumped timestamp
-      const { error: updateError } = await supabase
-        .from("servers")
-        .update({ last_bumped: now.toISOString() })
-        .eq("id", server.id);
-
-      if (updateError) throw updateError;
+      const serverRef = doc(db, "servers", server.id);
+      await updateDoc(serverRef, { last_bumped: now });
 
       message.reply("Server bumped successfully! 🚀");
     } catch (error) {

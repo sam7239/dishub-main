@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/lib/supabase";
+import { getServers } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import ServerCard from "@/components/dashboard/ServerCard";
-import { Tables } from "@/types/supabase";
+import { Server, ServerTag } from "@/types/firebase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
@@ -11,7 +13,7 @@ import Banner from "@/components/home/Banner";
 import { Label } from "./../components/ui/label";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-type Server = Tables<"servers"> & { server_tags: Tables<"server_tags">[] };
+// Server type is imported from @/types/firebase
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -22,30 +24,20 @@ export default function HomePage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      setIsAuthenticated(!!session);
-    };
-    checkAuth();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsAuthenticated(!!user);
+    });
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
     const fetchServers = async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase
-          .from("servers")
-          .select(
-            `
-            *,
-            server_tags (*)
-          `,
-          )
-          .order("last_bumped", { ascending: false });
-
-        if (error) throw error;
+        const data = await getServers({
+          orderByField: "last_bumped",
+          orderDirection: "desc",
+        });
         setServers(data as Server[]);
       } catch (error) {
         console.error("Error fetching servers:", error);

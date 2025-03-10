@@ -1,10 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+// This file is kept for compatibility but no longer used
+// The app now uses Firebase instead of Supabase
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("Missing Supabase environment variables");
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = null;

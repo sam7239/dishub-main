@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { MessageCircle } from "lucide-react";
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { auth } from "@/lib/firebase";
 
 export default function Header({
   isAuthenticated,
@@ -16,9 +16,16 @@ export default function Header({
 
   useEffect(() => {
     if (isAuthenticated) {
-      supabase.auth.getUser().then(({ data: { user } }) => {
-        setUser(user);
-      });
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        setUser({
+          user_metadata: {
+            avatar_url: currentUser.photoURL,
+            full_name: currentUser.displayName,
+            name: currentUser.displayName,
+          },
+        });
+      }
     }
   }, [isAuthenticated]);
   const navigate = useNavigate();

@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PlusCircle } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { createServer } from "@/lib/firebase";
 
 interface AddServerDialogProps {
   onServerAdded?: () => void;
@@ -46,40 +46,16 @@ export default function AddServerDialog({
     setLoading(true);
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      const { data: server, error: serverError } = await supabase
-        .from("servers")
-        .insert({
-          name: formData.name,
-          description: formData.description,
-          invite_url: formData.inviteUrl,
-          banner_url:
-            formData.bannerUrl ||
-            "https://images.unsplash.com/photo-1614422982208-51274e106c1e",
-          owner_id: user.id,
-          member_count: 0,
-        })
-        .select()
-        .single();
-
-      if (serverError) throw serverError;
-
-      const tags = formData.tags;
-
-      if (tags.length > 0) {
-        const { error: tagsError } = await supabase.from("server_tags").insert(
-          tags.map((tag) => ({
-            server_id: server.id,
-            tag,
-          })),
-        );
-
-        if (tagsError) throw tagsError;
-      }
+      await createServer({
+        name: formData.name,
+        description: formData.description,
+        invite_url: formData.inviteUrl,
+        banner_url:
+          formData.bannerUrl ||
+          "https://images.unsplash.com/photo-1614422982208-51274e106c1e",
+        member_count: 0,
+        tags: formData.tags,
+      });
 
       setOpen(false);
       onServerAdded?.();

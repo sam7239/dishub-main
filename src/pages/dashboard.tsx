@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/lib/supabase";
+import { getServers, signOutUser } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import ServerCard from "@/components/dashboard/ServerCard";
 import AddServerDialog from "@/components/dashboard/AddServerDialog";
-import { Tables } from "@/types/supabase";
+import { Server, ServerTag } from "@/types/firebase";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-type Server = Tables<"servers"> & { server_tags: Tables<"server_tags">[] };
+// Server type is imported from @/types/firebase
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -18,25 +20,13 @@ export default function Dashboard() {
   const fetchServers = async () => {
     setLoading(true);
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) {
+      const user = auth.currentUser;
+      if (!user) {
         navigate("/login");
         return;
       }
 
-      const { data, error } = await supabase
-        .from("servers")
-        .select(
-          `
-          *,
-          server_tags (*)
-        `,
-        )
-        .eq("owner_id", session.user.id);
-
-      if (error) throw error;
+      const data = await getServers({ ownerId: user.uid });
       setServers(data as Server[]);
     } catch (error) {
       console.error("Error fetching servers:", error);
@@ -54,7 +44,7 @@ export default function Dashboard() {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await signOutUser();
     navigate("/login");
   };
 
@@ -80,6 +70,13 @@ export default function Dashboard() {
           </div>
           <div className="flex gap-4">
             <AddServerDialog onServerAdded={fetchServers} />
+            <Button
+              variant="outline"
+              onClick={() => navigate("/admin")}
+              className="gap-2 bg-zinc-900 text-white border-zinc-800 hover:bg-zinc-800"
+            >
+              Admin
+            </Button>
             <Button
               variant="outline"
               onClick={handleLogout}

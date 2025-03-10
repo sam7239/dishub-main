@@ -6,7 +6,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tables } from "@/types/supabase";
+import { Server, ServerTag } from "@/types/firebase";
 import {
   Tooltip,
   TooltipContent,
@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/tooltip";
 import { OnlineIndicator } from "@/components/ui/online-indicator";
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { getCurrentUser, deleteServer, bumpServer } from "@/lib/firebase";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/dialog";
 import EditServerDialog from "./EditServerDialog";
 
-type Server = Tables<"servers"> & { server_tags: Tables<"server_tags">[] };
+// Server type is imported from @/types/firebase
 
 interface ServerCardProps {
   server: Server;
@@ -72,10 +72,8 @@ export default function ServerCard({
   useEffect(() => {
     // Check if current user is the owner
     const checkOwnership = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setIsOwner(user?.id === server.owner_id);
+      const user = getCurrentUser();
+      setIsOwner(user?.uid === server.owner_id);
     };
     checkOwnership();
   }, [server.owner_id]);
@@ -91,30 +89,7 @@ export default function ServerCard({
     if (!isOwner) return;
     setIsDeleting(true);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user || user.id !== server.owner_id) {
-        throw new Error("Unauthorized");
-      }
-
-      // Delete server tags first
-      const { error: tagsError } = await supabase
-        .from("server_tags")
-        .delete()
-        .eq("server_id", server.id);
-
-      if (tagsError) throw tagsError;
-
-      // Then delete the server
-      const { error: serverError } = await supabase
-        .from("servers")
-        .delete()
-        .eq("id", server.id)
-        .eq("owner_id", user.id); // Extra security check
-
-      if (serverError) throw serverError;
-
+      await deleteServer(server.id);
       onDelete?.();
     } catch (error) {
       console.error("Error deleting server:", error);
@@ -127,21 +102,7 @@ export default function ServerCard({
     if (!canBump || !isOwner) return;
     setIsBumping(true);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user || user.id !== server.owner_id) {
-        throw new Error("Unauthorized");
-      }
-
-      const { error } = await supabase
-        .from("servers")
-        .update({ last_bumped: new Date().toISOString() })
-        .eq("id", server.id)
-        .eq("owner_id", user.id); // Extra security check
-
-      if (error) throw error;
-
+      await bumpServer(server.id);
       const now = new Date();
       setLastBumped(now);
       setShowBumpSuccess(true);

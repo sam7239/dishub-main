@@ -1,4 +1,14 @@
-import { supabase } from "@/lib/supabase";
+import { auth, db } from "@/lib/firebase";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  deleteDoc,
+  doc,
+  addDoc,
+  serverTimestamp,
+} from "firebase/firestore";
 
 const serverNames = [
   "Gaming Haven",
@@ -55,55 +65,56 @@ const bannerImages = [
 export async function seedServers() {
   try {
     // Get the current user
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = auth.currentUser;
     if (!user) throw new Error("No authenticated user");
 
     // Delete all existing servers and their tags
-    const { error: deleteTagsError } = await supabase
-      .from("server_tags")
-      .delete()
-      .eq("server_id", "*");
+    // First get all servers owned by the user
+    const serversRef = collection(db, "servers");
+    const q = query(serversRef, where("owner_id", "==", user.uid));
+    const querySnapshot = await getDocs(q);
 
-    const { error: deleteServersError } = await supabase
-      .from("servers")
-      .delete()
-      .eq("owner_id", user.id);
+    // Delete each server and its tags
+    for (const serverDoc of querySnapshot.docs) {
+      // Delete tags first
+      const tagsRef = collection(db, "server_tags");
+      const tagsQuery = query(tagsRef, where("server_id", "==", serverDoc.id));
+      const tagsSnapshot = await getDocs(tagsQuery);
 
-    if (deleteTagsError) throw deleteTagsError;
-    if (deleteServersError) throw deleteServersError;
+      for (const tagDoc of tagsSnapshot.docs) {
+        await deleteDoc(doc(db, "server_tags", tagDoc.id));
+      }
+
+      // Then delete the server
+      await deleteDoc(doc(db, "servers", serverDoc.id));
+    }
 
     // Create 10 new servers
     for (let i = 0; i < 10; i++) {
       // Create server
       const memberCount = Math.floor(Math.random() * 9000) + 1000; // Random between 1000-10000
-      const { data: server, error: serverError } = await supabase
-        .from("servers")
-        .insert({
-          name: serverNames[i],
-          description: descriptions[i],
-          banner_url: bannerImages[i],
-          invite_url: `https://discord.gg/${Math.random().toString(36).substring(7)}`,
-          member_count: memberCount,
-          owner_id: user.id,
-        })
-        .select()
-        .single();
+      const serverRef = collection(db, "servers");
+      const serverData = {
+        name: serverNames[i],
+        description: descriptions[i],
+        banner_url: bannerImages[i],
+        invite_url: `https://discord.gg/${Math.random().toString(36).substring(7)}`,
+        member_count: memberCount,
+        owner_id: user.uid,
+        last_bumped: serverTimestamp(),
+        created_at: serverTimestamp(),
+      };
 
-      if (serverError) throw serverError;
+      const serverDoc = await addDoc(serverRef, serverData);
 
       // Create tags for the server
-      const serverTags = tagSets[i].map((tag) => ({
-        server_id: server.id,
-        tag: tag,
-      }));
-
-      const { error: tagsError } = await supabase
-        .from("server_tags")
-        .insert(serverTags);
-
-      if (tagsError) throw tagsError;
+      const tagsRef = collection(db, "server_tags");
+      for (const tag of tagSets[i]) {
+        await addDoc(tagsRef, {
+          server_id: serverDoc.id,
+          tag: tag,
+        });
+      }
     }
 
     return { success: true };

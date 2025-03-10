@@ -1,34 +1,25 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { useRoutes, Routes, Route, Navigate } from "react-router-dom";
 import routes from "tempo-routes";
-import { supabase } from "@/lib/supabase";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import Layout from "@/components/layout/Layout";
 
 const HomePage = lazy(() => import("./pages/home"));
 const LoginPage = lazy(() => import("./pages/login"));
 const AuthCallback = lazy(() => import("./pages/auth/callback"));
 const Dashboard = lazy(() => import("./pages/dashboard"));
+const AdminPage = lazy(() => import("./pages/admin"));
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      setIsAuthenticated(!!session);
-    };
-
-    checkAuth();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsAuthenticated(!!session);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsAuthenticated(!!user);
     });
 
-    return () => subscription.unsubscribe();
+    return () => unsubscribe();
   }, []);
 
   if (isAuthenticated === null) {
@@ -69,6 +60,12 @@ function App() {
             path="/dashboard"
             element={
               isAuthenticated ? <Dashboard /> : <Navigate to="/login" replace />
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              isAuthenticated ? <AdminPage /> : <Navigate to="/login" replace />
             }
           />
           {/* Add tempo route before catch-all */}

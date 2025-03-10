@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/lib/supabase";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import LoadingOverlay from "@/components/auth/LoadingOverlay";
 
 const AuthCallback = () => {
@@ -9,16 +10,18 @@ const AuthCallback = () => {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        const {
-          data: { session },
-          error,
-        } = await supabase.auth.getSession();
+        // Check if user is authenticated
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+          if (user) {
+            // Successfully authenticated
+            navigate("/dashboard");
+          } else {
+            // No user found
+            navigate("/login?error=auth-failed");
+          }
+        });
 
-        if (error) throw error;
-        if (!session) throw new Error("No session found");
-
-        // Successfully authenticated
-        navigate("/dashboard");
+        return () => unsubscribe();
       } catch (error) {
         console.error("Auth callback error:", error);
         navigate("/login?error=auth-failed");

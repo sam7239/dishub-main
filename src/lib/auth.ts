@@ -1,21 +1,13 @@
-import { supabase } from "./supabase";
+import {
+  auth,
+  signInWithDiscord as firebaseSignInWithDiscord,
+} from "./firebase";
+import { onAuthStateChanged } from "firebase/auth";
 
 export const signInWithDiscord = async () => {
-  // Clear any existing session first
-  await supabase.auth.signOut();
   try {
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: "discord",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        scopes: "identify email guilds",
-      },
-    });
-
-    if (error) {
-      console.error("Discord sign in error:", error);
-      throw error;
-    }
+    const { data, error } = await firebaseSignInWithDiscord();
+    if (error) throw error;
     return { data, error: null };
   } catch (error) {
     console.error("Error:", error);
@@ -24,9 +16,31 @@ export const signInWithDiscord = async () => {
 };
 
 export const handleAuthCallback = async () => {
-  const { data, error } = await supabase.auth.getSession();
-  if (error || !data.session) {
-    return { session: null, error: error || new Error("No session found") };
-  }
-  return { session: data.session, error: null };
+  return new Promise((resolve) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribe();
+      if (user) {
+        resolve({ session: { user }, error: null });
+      } else {
+        resolve({ session: null, error: new Error("No session found") });
+      }
+    });
+  });
+};
+
+export const getSession = () => {
+  return new Promise((resolve) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribe();
+      resolve({ data: { session: user ? { user } : null } });
+    });
+  });
+};
+
+export const onAuthStateChange = (callback) => {
+  const unsubscribe = onAuthStateChanged(auth, (user) => {
+    callback("SIGNED_IN", user ? { user } : null);
+  });
+
+  return { data: { subscription: { unsubscribe } } };
 };
